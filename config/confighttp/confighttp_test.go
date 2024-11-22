@@ -13,9 +13,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1586,4 +1589,114 @@ func TestDefaultHTTPServerSettings(t *testing.T) {
 	assert.Equal(t, 30*time.Second, httpServerSettings.WriteTimeout)
 	assert.Equal(t, time.Duration(0), httpServerSettings.ReadTimeout)
 	assert.Equal(t, 1*time.Minute, httpServerSettings.ReadHeaderTimeout)
+}
+
+// startSocketServer starts a server listening on a UNIX socket.
+func startSocketServer(t *testing.T, config ServerConfig, wg *sync.WaitGroup, stopChan chan bool) {
+	t.Helper()
+	defer wg.Done()
+
+	// Ensure the socket file is removed before starting.
+	if _, err := os.Stat(config.Endpoint); err == nil {
+		os.Remove(config.Endpoint)
+	}
+
+	ln, err := net.Listen("unix", config.Endpoint)
+	if err != nil {
+		panic(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		<-stopChan
+		ln.Close()
+	}()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			// Break out of the loop when the listener is closed.
+			return
+		}
+
+		go func(c net.Conn) {
+			defer c.Close()
+
+			// Read data from client.
+			buf := make([]byte, 1024)
+			n, err := c.Read(buf)
+			if err != nil {
+				return
+			}
+
+			// Print received data and respond.
+			received := string(buf[:n])
+			c.Write([]byte("Hello from server!" + received))
+		}(conn)
+	}
+}
+
+// startSocketClient connects to the UNIX socket and sends a message.
+func startSocketClient(t *testing.T, config ClientConfig, message string) (string, error) {
+	t.Helper()
+
+	conn, err := net.Dial("unix", config.Endpoint)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	// Send message to server.
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		return "", err
+	}
+
+	// Read server response.
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return "", err
+	}
+
+	return string(buf[:n]), nil
+}
+
+// TestServerClientCommunication tests server-client interaction using UNIX sockets.
+func TestServerClientCommunication(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping for Windows")
+	}
+
+	tmpDir := t.TempDir()
+	socketName := fmt.Sprintf("%s/test.sock", tmpDir)
+	serverConfig := ServerConfig{Endpoint: socketName, Network: "unix"}
+	clientConfig := ClientConfig{Endpoint: socketName, Network: "unix"}
+
+	var wg sync.WaitGroup
+	stopChan := make(chan bool)
+
+	// Start the server.
+	wg.Add(1)
+	go startSocketServer(t, serverConfig, &wg, stopChan)
+
+	// Allow the server to initialize.
+	time.Sleep(100 * time.Millisecond)
+
+	// Client sends a message.
+	clientMessage := "Hello from client!"
+	response, err := startSocketClient(t, clientConfig, clientMessage)
+	if err != nil {
+		t.Fatalf("Client error: %v", err)
+	}
+
+	// Validate server response.
+	expectedResponse := fmt.Sprintf("Hello from server!%s", clientMessage)
+	if response != expectedResponse {
+		t.Fatalf("Expected '%s', got '%s'", expectedResponse, response)
+	}
+
+	// Stop the server and clean up.
+	close(stopChan)
+	wg.Wait()
 }
