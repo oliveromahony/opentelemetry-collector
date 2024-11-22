@@ -36,11 +36,16 @@ import (
 const headerContentEncoding = "Content-Encoding"
 const defaultMaxRequestBodySize = 20 * 1024 * 1024 // 20MiB
 var defaultCompressionAlgorithms = []string{"", "gzip", "zstd", "zlib", "snappy", "deflate", "lz4"}
+var defaultNetworkProtocols = []string{"",  "tcp", "tcp4", "tcp6", "unix"}
 
 // ClientConfig defines settings for creating an HTTP client.
 type ClientConfig struct {
 	// The target URL to send data to (e.g.: http://some.url:9411/v1/traces).
 	Endpoint string `mapstructure:"endpoint"`
+
+	// Network configures the network associated with the server.
+	// The network must be "tcp", "tcp4", "tcp6" or "unix".
+	Network string `mapstructure:"network"`
 
 	// ProxyURL setting for the collector
 	ProxyURL string `mapstructure:"proxy_url"`
@@ -276,6 +281,10 @@ func (interceptor *headerRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 type ServerConfig struct {
 	// Endpoint configures the listening address for the server.
 	Endpoint string `mapstructure:"endpoint"`
+	
+	// Network configures the network associated with the server.
+	// The network must be "tcp", "tcp4", "tcp6" or "unix".
+	Network string `mapstructure:"network"`
 
 	// TLSSetting struct exposes TLS client configuration.
 	TLSSetting *configtls.ServerConfig `mapstructure:"tls"`
@@ -356,7 +365,11 @@ type AuthConfig struct {
 
 // ToListener creates a net.Listener.
 func (hss *ServerConfig) ToListener(ctx context.Context) (net.Listener, error) {
-	listener, err := net.Listen("tcp", hss.Endpoint)
+	if hss.Network == "" {
+		hss.Network = "tcp"
+	}
+
+	listener, err := net.Listen(hss.Network, hss.Endpoint)
 	if err != nil {
 		return nil, err
 	}

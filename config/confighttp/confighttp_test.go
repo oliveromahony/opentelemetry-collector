@@ -153,6 +153,48 @@ func TestAllHTTPClientSettings(t *testing.T) {
 			},
 			shouldError: false,
 		},
+		{
+			name: "all_valid_settings_unix_with_none_compression",
+			settings: ClientConfig{
+				Network: "unix",
+				Endpoint: "localhost:1234",
+				TLSSetting: configtls.ClientConfig{
+					Insecure: false,
+				},
+				ReadBufferSize:       1024,
+				WriteBufferSize:      512,
+				MaxIdleConns:         &maxIdleConns,
+				MaxIdleConnsPerHost:  &maxIdleConnsPerHost,
+				MaxConnsPerHost:      &maxConnsPerHost,
+				IdleConnTimeout:      &idleConnTimeout,
+				Compression:          "none",
+				DisableKeepAlives:    true,
+				HTTP2ReadIdleTimeout: idleConnTimeout,
+				HTTP2PingTimeout:     http2PingTimeout,
+			},
+			shouldError: false,
+		},
+		{
+			name: "all_valid_settings_unix_with_gzip_compression",
+			settings: ClientConfig{
+				Network: "unix",
+				Endpoint: "localhost:1234",
+				TLSSetting: configtls.ClientConfig{
+					Insecure: false,
+				},
+				ReadBufferSize:       1024,
+				WriteBufferSize:      512,
+				MaxIdleConns:         &maxIdleConns,
+				MaxIdleConnsPerHost:  &maxIdleConnsPerHost,
+				MaxConnsPerHost:      &maxConnsPerHost,
+				IdleConnTimeout:      &idleConnTimeout,
+				Compression:          "gzip",
+				DisableKeepAlives:    true,
+				HTTP2ReadIdleTimeout: idleConnTimeout,
+				HTTP2PingTimeout:     http2PingTimeout,
+			},
+			shouldError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -197,6 +239,20 @@ func TestPartialHTTPClientSettings(t *testing.T) {
 			name: "valid_partial_settings",
 			settings: ClientConfig{
 				Endpoint: "localhost:1234",
+				Network: "tcp",
+				TLSSetting: configtls.ClientConfig{
+					Insecure: false,
+				},
+				ReadBufferSize:  1024,
+				WriteBufferSize: 512,
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid_partial_unix_settings",
+			settings: ClientConfig{
+				Network: "unix",
+				Endpoint: "unix://localhost:1234",
 				TLSSetting: configtls.ClientConfig{
 					Insecure: false,
 				},
