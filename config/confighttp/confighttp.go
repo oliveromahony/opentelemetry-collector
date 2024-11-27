@@ -172,6 +172,10 @@ func (hcs *ClientConfig) ToClient(ctx context.Context, host component.Host, sett
 		transport.IdleConnTimeout = *hcs.IdleConnTimeout
 	}
 
+	if hcs.Network != "" {
+		transport.DialContext(ctx, hcs.Network, hcs.Endpoint)
+	}
+
 	// Setting the Proxy URL
 	if hcs.ProxyURL != "" {
 		proxyURL, parseErr := url.ParseRequestURI(hcs.ProxyURL)
